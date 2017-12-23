@@ -11,29 +11,12 @@ lib_path = 'path/to/lib'
 sys.path.append(lib_path)
 import midi
 from midi.utils import midiread, midiwrite
-
 import theano
 import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
-def pre_proc(data):
-	norm = np.sqrt(np.sum(data**2, axis=1))
-	return data/norm[:, None]
-
-def pre_proc3(data):
-	for i in range(data.shape[0]):
-		norm = np.sqrt(np.sum(data[i]**2, axis=1))
-		data[i] = data[i]/norm[:, None]
-	return data
-
 def softmax(x):
     return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-def unzip(zipped):
-    new_params = OrderedDict()
-    for kk, vv in zipped.items():
-        new_params[kk] = vv.get_value()
-    return new_params
 
 class MusicDataProvider:
 	def __init__(self, dir_path, set_name, pitch_range, dt, batch_size, shuffle=True):
@@ -111,7 +94,7 @@ def SFM(tparams, x, omega, opts):
 		Im_s = f*Im_s_+T.outer(g*i, T.sin(omega*t_))
 
 		A = T.sqrt(Re_s**2+Im_s**2)
-
+		#function for each k frequency
 		def __feq(U_o, W_o, V_o, b_o, W_z, b_z, A_k, z_k):
 			o = T.nnet.sigmoid(T.dot(U_o, A_k)+T.dot(W_o, z_)+T.dot(V_o, x_)+b_o)
 			zz = z_k+o*T.tanh(T.dot(W_z, A_k)+b_z)
@@ -132,22 +115,29 @@ def Adaptive_SFM(tparams, x, omega, opts):
 	nsteps = x.shape[0]
 
 	def _recurrence(x_, t_, omg_, Re_s_, Im_s_, z_):
+		#state forget gate, outputs vector size D
 		f_ste = T.nnet.sigmoid(T.dot(tparams['W_ste'], z_)+T.dot(tparams['V_ste'], x_)+tparams['b_ste'])
+		#frequency forget gate, outputs vector size K
 		f_fre = T.nnet.sigmoid(T.dot(tparams['W_fre'], z_)+T.dot(tparams['V_fre'], x_)+tparams['b_fre'])
+		#combined forget gate
 		f = T.outer(f_ste, f_fre)
-
+		#input gate
 		g = T.nnet.sigmoid(T.dot(tparams['W_g'], z_)+T.dot(tparams['V_g'], x_)+tparams['b_g'])
+		#information modulation gate
 		i = T.tanh(T.dot(tparams['W_i'], z_)+T.dot(tparams['V_i'], x_)+tparams['b_i'])
 
 		omg = T.dot(tparams['W_omg'], z_)+T.dot(tparams['V_omg'], x_)+tparams['b_omg']
-
+		#real and imaginary S
 		Re_s = f*Re_s_+T.outer(g*i, T.cos(omg_*t_))
 		Im_s = f*Im_s_+T.outer(g*i, T.sin(omg_*t_))
-
+		#amplitude function
 		A = T.sqrt(Re_s**2+Im_s**2)
 
 		def __feq(U_o, W_o, V_o, b_o, W_z, b_z, A_k, z_k):
+			#update each component for each frequency of lookback
+			#omega that combines amplitude, previous output, current input, and bias, dimensions M
 			o = T.nnet.sigmoid(T.dot(U_o, A_k)+T.dot(W_o, z_)+T.dot(V_o, x_)+b_o)
+			#output vector for each frequency component
 			zz = z_k+o*T.tanh(T.dot(W_z, A_k)+b_z)
 			return zz
 
@@ -337,4 +327,3 @@ if __name__ == '__main__':
 				'continue_dir': '/path/to/continue_dir', 'save_dir': '/path/to/save_dir'}
 
 	train(data_opt, train_opt)
-
