@@ -105,11 +105,3 @@ with tf.Session() as sess:
     sess.run(init)
     output = sess.run(amplitude,feed_dict={x : X[0]})
     print(output.shape)
-
-
-"""
-with tf.control_dependencies([o]):
-    Re_s_assign = tf.assign(Re_s_,real_s)
-    Im_s_assign = tf.assign(Im_s_, img_s)
-    omega_assign = tf.assign(omega_, omega)
-    """
