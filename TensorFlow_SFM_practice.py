@@ -33,7 +33,6 @@ features = X.shape[2]
 sequence_length = X.shape[1]
 z_vector_length = X.shape[1]
 num_frequencies = X.shape[2]
-#yooooooooooooooooooooooooooooooooo
 
 training_params['W_state'] = weight_variable([features, sequence_length], name='W_state')
 training_params['V_state'] = weight_variable([features, z_vector_length], name='V_state')
