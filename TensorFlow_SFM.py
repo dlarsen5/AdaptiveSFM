@@ -77,15 +77,18 @@ class SFM():
         modulation_gate = tf.tanh(tf.matmul(self.training_params['W_i'], z) + tf.matmul(self.training_params['V_i'], x) + self.training_params['b_i'],name='Modulation_Gate')
         # for ADP
         omega = tf.matmul(self.training_params['W_omega'], z) + tf.matmul(self.training_params['V_omega'], x) + self.training_params['b_omega']
-        #todo what the fuck is _t? is it time step cuz then its indexing not an actual number
-        real_s = combined_forget_gate * Re_s_ + tf.einsum('i,j->ij', input_gate * modulation_gate, tf.cos(omega_ * t_))
-        img_s = combined_forget_gate * Im_s_ + tf.einsum('i,j->ij', input_gate * modulation_gate, tf.sin(omega_ * t_))
+
+        real_s = combined_forget_gate * self.Re_s_ + tf.einsum('i,j->ij', input_gate * modulation_gate, tf.cos(omega_))
+        img_s = combined_forget_gate * self.Im_s_ + tf.einsum('i,j->ij', input_gate * modulation_gate, tf.sin(omega_))
 
         amplitude = tf.sqrt(real_s ** 2 + img_s ** 2)
 
         # omega that combines amplitude, previous output, current input, and bias, dimensions M
         o = tf.sigmoid(tf.matmul(self.training_params['U_o'], amplitude) + tf.matmul(self.training_params['W_o'], z) + tf.matmul(self.training_params['V_o'], x) + self.training_params['b_o'])
         # output vector for each frequency component
+
+        Re_s_assign = tf.assign(self.Re_s_,real_s)
+        Im_s_assign = tf.assign(self.Im_s_, img_s)
 
         zz = []
         A_k = []
