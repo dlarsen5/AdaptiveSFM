@@ -114,6 +114,8 @@ def SFM(tparams, x, omega, opts):
 def Adaptive_SFM(tparams, x, omega, opts):
 	nsteps = x.shape[0]
 
+	#x has dimensions same as data [sequence_length, features]
+
 	def _recurrence(x_, t_, omg_, Re_s_, Im_s_, z_):
 		#state forget gate, outputs vector size D
 		f_ste = T.nnet.sigmoid(T.dot(tparams['W_ste'], z_)+T.dot(tparams['V_ste'], x_)+tparams['b_ste'])
@@ -285,6 +287,11 @@ def train(data_opt, train_opt):
 def param_init(mode, train_opt, input_dim, isAdp=False):
 	if mode == 'train':
 		params = OrderedDict()
+
+		#dim_pitch is number of features (set of 88 keys)
+		#dim is sequence length
+		#dim_feq is number of frequencies
+
 		params['W_ste'] = pre_proc(np.random.randn(train_opt['dim'], train_opt['dim_pitch']))
 		params['V_ste'] = pre_proc(np.random.randn(train_opt['dim'], input_dim))
 		params['b_ste'] = np.random.randn(train_opt['dim'])
@@ -327,3 +334,5 @@ if __name__ == '__main__':
 				'continue_dir': '/path/to/continue_dir', 'save_dir': '/path/to/save_dir'}
 
 	train(data_opt, train_opt)
+
+#data has dimensions [seq_length, features]
