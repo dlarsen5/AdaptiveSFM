@@ -2,70 +2,108 @@ import tensorflow as tf
 import numpy as np
 from Get_Data import make_sequences
 
-def step():
-    #x, state_, z, seq_num = tf.unstack(inputs)
-    #seq_num = tf.unstack(inputs)[0]
+def build_graph():
+    with tf.variable_scope('Cell'):
 
-    with tf.name_scope('Cell'):
+        W_pre_state = tf.get_variable('W_pre_state', shape=[dimension_D, dimension_N])
+        W_state = tf.get_variable('W_state', shape=[dimension_D])
+        V_state = tf.get_variable('V_state', shape=[dimension_H])
+        b_state = tf.get_variable('b_state', shape=[dimension_H])
 
-        Re_s_ = tf.get_variable('Re_s_',[1])
-        Im_s_ = tf.get_variable('Im_s_',[1])
-        omega_ = tf.get_variable('omega_',[1])
+        W_pre_freq = tf.get_variable('W_pre_freq', shape=[dimension_D, dimension_N])
+        W_freq = tf.get_variable('W_freq', shape=[dimension_D])
+        V_freq = tf.get_variable('V_freq', shape=[dimension_H])
+        b_freq = tf.get_variable('b_freq', shape=[dimension_H])
 
-        z = tf.get_variable('z',shape=[sequence_length, sequence_length],initializer=tf.truncated_normal([sequence_length, sequence_length], stddev=0.1))
-
-        zz = tf.get_variable('W_state',shape=[sequence_length],initializer=tf.truncated_normal([sequence_length], stddev=0.1))
-
-        W_state = tf.get_variable('W_state',shape=[sequence_length, features],initializer=tf.truncated_normal([sequence_length,features], stddev=0.1))
-        V_state = tf.get_variable('V_state',shape=[sequence_length, sequence_length],initializer=tf.truncated_normal([sequence_length,features], stddev=0.1))
-        b_state = tf.get_variable('b_state',shape=[sequence_length],initializer=tf.constant(0.1, shape=[sequence_length]))
-
-        W_freq =  tf.get_variable('W_freq',shape=[sequence_length, features],initializer=tf.truncated_normal([sequence_length,features], stddev=0.1))
-        V_freq = tf.get_variable('V_freq', shape=[sequence_length, sequence_length],initializer=tf.truncated_normal([sequence_length, features], stddev=0.1))
-        b_freq = tf.get_variable('b_freq',shape=[sequence_length],initializer=tf.constant(0.1, shape=[sequence_length]))
-
-        W_g = tf.get_variable('W_g',shape=[sequence_length, features],initializer=tf.truncated_normal([sequence_length,features], stddev=0.1))
-        V_g = tf.get_variable('V_g', shape=[sequence_length, sequence_length],initializer=tf.truncated_normal([sequence_length, features], stddev=0.1))
-        b_g = tf.get_variable('b_g', shape=[sequence_length],initializer=tf.constant(0.1, shape=[sequence_length]))
-
-        W_i = tf.get_variable('V_i',shape=[sequence_length, features],initializer=tf.truncated_normal([sequence_length,features], stddev=0.1))
-        V_i = tf.get_variable('V_i', shape=[sequence_length, sequence_length],initializer=tf.truncated_normal([sequence_length, features], stddev=0.1))
-        b_i = tf.get_variable('b_i',shape=[sequence_length],initializer=tf.constant(0.1, shape=[sequence_length]))
-
-        U_o = tf.get_variable('U_o',shape=[sequence_length, features, sequence_length],initializer=tf.truncated_normal([sequence_length, features, sequence_length], stddev=0.1))
-        W_o = tf.get_variable('W_o', shape=[sequence_length, features, features],initializer=tf.truncated_normal([sequence_length, features, sequence_length], stddev=0.1))
-        V_o = tf.get_variable('V_o', shape=[sequence_length, features, sequence_length],initializer=tf.truncated_normal([sequence_length, features, sequence_length], stddev=0.1))
-        b_o = tf.get_variable('b_i',shape=[sequence_length, features],initializer=tf.constant(0.1, shape=[sequence_length, features]))
+        W_pre_g = tf.get_variable('W_pre_g', shape=[dimension_D, dimension_N])
+        W_g = tf.get_variable('W_g', shape=[dimension_D])
+        V_g = tf.get_variable('V_g', shape=[dimension_H])
+        b_g = tf.get_variable('b_g', shape=[dimension_H])
 
 
-        W_z = tf.get_variable('W_z', shape=[sequence_length, features, sequence_length],initializer=tf.truncated_normal([sequence_length, features], stddev=0.1))
-        b_z = tf.get_variable('b_z', shape=[sequence_length, features], initializer=tf.constant(0.1, shape=[sequence_length]))
+        W_pre_i = tf.get_variable('V_pre_i', shape=[dimension_D, dimension_N])
+        W_i = tf.get_variable('W_i', shape=[dimension_D])
+        V_i = tf.get_variable('V_i', shape=[dimension_H])
+        b_i = tf.get_variable('b_i', shape=[dimension_H])
 
-        W_omega = tf.get_variable('W_omega', shape=[sequence_length, features],initializer=tf.truncated_normal([sequence_length, sequence_length], stddev=0.1))
-        V_omega = tf.get_variable('V_omega', shape=[sequence_length, sequence_length],initializer=tf.truncated_normal([sequence_length, sequence_length], stddev=0.1))
-        b_omega = tf.get_variable('b_omega', shape=[sequence_length],initializer=tf.constant(0.1, shape=[sequence_length]))
+        #U_o = tf.get_variable('U_o', shape=[dimension_H, dimension_H, dimension_H])
+        #W_pre_o = tf.get_variable('W_pre_o', shape=[dimension_D, dimension_N])
+        #W_o = tf.get_variable('W_o', shape=[dimension_H, dimension_H, dimension_D])
+        #V_o = tf.get_variable('V_o', shape=[dimension_H, dimension_H, dimension_H])
+        #b_o = tf.get_variable('b_i', shape=[dimension_H, dimension_H])
 
 
-    state_forget_gate = tf.sigmoid(tf.add(tf.add(tf.matmul(W_state[seq_num], x[seq_num]), tf.matmul(V_state[seq_num], z[seq_num])), b_state[seq_num]), name='State_Forget')
-    frequency_forget_gate = tf.sigmoid(tf.add(tf.add(tf.matmul(W_freq[seq_num], x[seq_num]), tf.matmul(V_freq[seq_num], z[seq_num])), b_freq[seq_num]), name='Freq_Forget')
+        #W_z = tf.get_variable('W_z', shape=[dimension_H, dimension_H, dimension_H]nsion_H], stddev=0.1))
+        #b_z = tf.get_variable('b_z', shape=[dimension_H, dimension_H]imension_H]))
+
+        W_pre_omega = tf.get_variable('W_pre_omega', shape=[dimension_D, dimension_N])
+        W_omega = tf.get_variable('W_omega', shape=[dimension_H, dimension_D])
+        V_omega = tf.get_variable('V_omega', shape=[dimension_H, dimension_H])
+        b_omega = tf.get_variable('b_omega', shape=[dimension_H])
+
+    return
+
+def step(prev_output, x):
+    #TODO sort out prev value unpacking
+    omg_, Re_s_, Im_s_, amp = tf.unstack(prev_output)
+
+    with tf.variable_scope('Cell',reuse=True):
+
+        W_pre_state = tf.get_variable('W_pre_state', shape=[dimension_D, dimension_N])
+        W_state = tf.get_variable('W_state', shape=[dimension_D])
+        V_state = tf.get_variable('V_state', shape=[dimension_H])
+        b_state = tf.get_variable('b_state', shape=[dimension_H])
+
+        W_pre_freq = tf.get_variable('W_pre_freq', shape=[dimension_D, dimension_N])
+        W_freq = tf.get_variable('W_freq', shape=[dimension_D])
+        V_freq = tf.get_variable('V_freq', shape=[dimension_H])
+        b_freq = tf.get_variable('b_freq', shape=[dimension_H])
+
+        W_pre_g = tf.get_variable('W_pre_g', shape=[dimension_D, dimension_N])
+        W_g = tf.get_variable('W_g', shape=[dimension_D])
+        V_g = tf.get_variable('V_g', shape=[dimension_H])
+        b_g = tf.get_variable('b_g', shape=[dimension_H])
+
+
+        W_pre_i = tf.get_variable('V_pre_i', shape=[dimension_D, dimension_N])
+        W_i = tf.get_variable('W_i', shape=[dimension_D])
+        V_i = tf.get_variable('V_i', shape=[dimension_H])
+        b_i = tf.get_variable('b_i', shape=[dimension_H])
+
+        #U_o = tf.get_variable('U_o', shape=[dimension_H, dimension_H, dimension_H])
+        #W_pre_o = tf.get_variable('W_pre_o', shape=[dimension_D, dimension_N])
+        #W_o = tf.get_variable('W_o', shape=[dimension_H, dimension_H, dimension_D])
+        #V_o = tf.get_variable('V_o', shape=[dimension_H, dimension_H, dimension_H])
+        #b_o = tf.get_variable('b_i', shape=[dimension_H, dimension_H])
+
+
+        #W_z = tf.get_variable('W_z', shape=[dimension_H, dimension_H, dimension_H]nsion_H], stddev=0.1))
+        #b_z = tf.get_variable('b_z', shape=[dimension_H, dimension_H]imension_H]))
+
+        W_pre_omega = tf.get_variable('W_pre_omega', shape=[dimension_D, dimension_N])
+        W_omega = tf.get_variable('W_omega', shape=[dimension_H, dimension_D])
+        V_omega = tf.get_variable('V_omega', shape=[dimension_H, dimension_H])
+        b_omega = tf.get_variable('b_omega', shape=[dimension_H])
+
+    state_forget_gate = tf.sigmoid(tf.add(tf.add(tf.multiply(W_state, tf.reduce_sum(tf.multiply(W_pre_state,x),1,keep_dims=True)), tf.multiply(V_state, z_)), b_state), name='State_Forget')
+    frequency_forget_gate = tf.sigmoid(tf.add(tf.add(tf.multiply(W_freq, tf.reduce_sum(tf.multiply(W_pre_freq,x),1,keep_dims=True)), tf.multiply(V_freq, z_)), b_freq), name='Freq_Forget')
 
     combined_forget_gate = tf.multiply(state_forget_gate, frequency_forget_gate)
 
-    input_gate = tf.sigmoid(tf.add(tf.add(tf.matmul(W_g[seq_num], x[seq_num]), tf.matmul(V_g[seq_num], z[seq_num])), b_g[seq_num]),name='Input_Gate')
+    input_gate = tf.sigmoid(tf.add(tf.add(tf.multiply(W_g, tf.reduce_sum(tf.multiply(W_pre_g,x),1,keep_dims=True)), tf.multiply(V_g, z_)), b_g),name='Input_Gate')
 
-    modulation_gate = tf.tanh(tf.add(tf.add(tf.matmul(W_i[seq_num], x[seq_num]), tf.matmul(V_i[seq_num], z[seq_num])), b_i[seq_num]),name='Modulation_Gate')
+    modulation_gate = tf.tanh(tf.add(tf.add(tf.multiply(W_i, tf.reduce_sum(tf.multiply(W_pre_i,x),1,keep_dims=True)), tf.multiply(V_i, z_)), b_i),name='Modulation_Gate')
 
-    omega = tf.matmul(tf.add(tf.add(W_omega[seq_num], x[seq_num]), tf.matmul(V_omega[seq_num], z[seq_num])), b_omega[seq_num])
+    omega = tf.multiply(tf.add(tf.multiply(W_omega, tf.reduce_sum(tf.multiply(W_pre_omega,x),1,keep_dims=True)),tf.multiply(V_omega, z_)), b_omega)
 
-    real_s = combined_forget_gate * Re_s_ + tf.multiply(input_gate * modulation_gate, tf.cos(omega_))
-    img_s = combined_forget_gate * Im_s_ + tf.multiply(input_gate * modulation_gate, tf.sin(omega_))
+    real_s = combined_forget_gate * Re_s_ + tf.multiply(input_gate * modulation_gate, tf.cos(omg_))
+    img_s = combined_forget_gate * Im_s_ + tf.multiply(input_gate * modulation_gate, tf.sin(omg_))
 
     amplitude = tf.sqrt(real_s ** 2 + img_s ** 2)
 
 
-
-    """
     zz = 0
+    """
     def __freq(inputs):
         U_k, W_k, V_k, b_k, W_z_k, b_z_k, A_k = tf.unstack(inputs)
         o = tf.sigmoid(tf.matmul(U_k, A_k) + tf.matmul(W_k, x) + tf.matmul(V_k, z) + b_k)
@@ -74,34 +112,36 @@ def step():
 
         return zz
 
-    _ = tf.scan(__freq,elems=[U_o,W_o,V_o,b_o,W_z,b_z,tf.transpose(amplitude)])"""
+    _ = tf.scan(__freq,elems=[U_o,W_o,V_o,b_o,W_z,b_z,tf.transpose(amplitude)])
+    """
 
-    return amplitude
-
-
+    return tf.stack([omega, real_s, img_s, amplitude])
 
 with tf.Session() as sess:
 
-    X, seq_labels = make_sequences(['AAPL'])
+    #X, seq_labels = make_sequences(['AAPL'])
+
+    X = np.random.rand(5, 5, 3).astype(np.float32)
 
     training_params = {}
-    features = X.shape[2]
-    sequence_length = X.shape[1]
+    dimension_N = X.shape[2]
+    dimension_H = X.shape[1]
+    dimension_D = X.shape[1]
     num_frequencies = X.shape[2]
-    input_dim = sequence_length
+    batch_size = X.shape[0]
 
-    x = tf.placeholder(tf.float32, shape=[sequence_length, features])
+    x = tf.placeholder(tf.float32, shape=[batch_size, dimension_D, dimension_N])
+    z_ = tf.constant(np.random.rand(dimension_H),dtype=tf.float32)
+
+    build_graph()
 
     init = tf.global_variables_initializer()
-
     sess.run(init)
+    pre_output = np.array([1.0,1.0,1.0,1.0]).astype(np.float32)
 
-    seq_num = tf.Variable(0,name='seq_num')
+    #states = tf.scan(step,elems=X)
 
-    for observation in X:
-        for i in range(0,sequence_length-1):
-            seq_num.assign(i)
-            #inputs = tf.stack([seq_num])
-            #output = tf.scan(step,name='step')
-            observation = np.array(observation)
-            run = sess.run(step,feed_dict={x : observation, seq_num : seq_num})
+
+    for i in X:
+        output = sess.run(step(pre_output,i))
+        print(output[-1][0])
