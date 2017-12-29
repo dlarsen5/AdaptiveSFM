@@ -78,7 +78,6 @@ class MusicDataProvider:
 	def get_data_dims(self):
 		return self.data[0].shape[1]
 
-
 def SFM(tparams, x, omega, opts):
 	nsteps = x.shape[0]
 
