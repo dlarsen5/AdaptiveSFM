@@ -114,8 +114,6 @@ def SFM(tparams, x, omega, opts):
 def Adaptive_SFM(tparams, x, omega, opts):
 	nsteps = x.shape[0]
 
-	#x has dimensions same as data [sequence_length, features]
-
 	def _recurrence(x_, t_, omg_, Re_s_, Im_s_, z_):
 		#state forget gate, outputs vector size D
 		f_ste = T.nnet.sigmoid(T.dot(tparams['W_ste'], z_)+T.dot(tparams['V_ste'], x_)+tparams['b_ste'])
@@ -138,9 +136,13 @@ def Adaptive_SFM(tparams, x, omega, opts):
 		def __feq(U_o, W_o, V_o, b_o, W_z, b_z, A_k, z_k):
 			#update each component for each frequency of lookback
 			#omega that combines amplitude, previous output, current input, and bias, dimensions M
+
+			#all same size as x e R^D where d is sequence length
 			o = T.nnet.sigmoid(T.dot(U_o, A_k)+T.dot(W_o, z_)+T.dot(V_o, x_)+b_o)
 			#output vector for each frequency component
+			#summation of the D x K vectors across K frequencies, in total is K x (D x K)
 			zz = z_k+o*T.tanh(T.dot(W_z, A_k)+b_z)
+			#return one K vector with the last value being the summation of all previous sequences and also the predicted value
 			return zz
 
 		res, upd = theano.scan(__feq, sequences=[tparams['U_o'], tparams['W_o'], tparams['V_o'], tparams['b_o'], tparams['W_z'], tparams['b_z'], A.transpose()],
@@ -155,6 +157,8 @@ def Adaptive_SFM(tparams, x, omega, opts):
 	return rval[3]
 
 def adadelta(tparams, train_feats, train_nframe, omega, cost, grads):
+
+	#backprop function based on cost and gradient (change in cost),
 
     shared_grads   = [theano.shared(p.get_value() * np.asarray(0.), name='%s_grad' % k)   for k, p in tparams.items()]
     running_grads2 = [theano.shared(p.get_value() * np.asarray(0.), name='%s_rgrad2' % k) for k, p in tparams.items()]
@@ -205,8 +209,9 @@ def build_model_train(tparams, train_opt):
         x_start = T.sum(t_n[:i])
         x_end = x_start+t_n[i]
         x = t_f[x_start:x_end]
-
+		#returns vector of guessed end of sequence values
         outs = SFM(tparams, x, omega, train_opt)
+		#test log likelihood against
         log_lik = T.nlinalg.trace(T.dot(x, T.log(T.nnet.softmax(outs)).transpose()))
         
         total_cost = cost_prev+(-log_lik)
@@ -248,8 +253,11 @@ def train(data_opt, train_opt):
 	print 'Begin training...'
 	uidx = 0
 	prev_log_like = -np.inf
+	#build initial frequency weightings based on number of k frequencies
 	omega = np.array([i*2*np.pi/train_opt['dim_feq'] for i in range(train_opt['dim_feq'])])
+	#for epoch in epoch range
 	for eidx in range(train_opt['max_epoch']):
+		#for batch in batch range
 		for bidx in range(dp_tr.get_batch_num()):
 			[epoch, batch, [data, nframe]] = dp_tr.get_next_batch()
 
