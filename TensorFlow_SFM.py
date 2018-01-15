@@ -118,18 +118,19 @@ class SFM_rnn():
 
         self.initial_hidden = tf.stack([self.initial_hidden_time, self.initial_hidden_time, self.initial_hidden_time, self.initial_hidden_time],axis=0)
 
-        #x has size [batch_size, sequence_length, N-features
         self.processed_input = tf.transpose(tf.transpose(self._inputs,perm=[2,0,1]))
         outputs = tf.scan(step, elems=[self.processed_input,(np.arange(self.state_size, dtype=np.float64) + 1) / self.state_size], initializer=self.initial_hidden)
         #last state of hidden state matrices
-        last_state = tf.squeeze(outputs[-1:, -1:, :, -1:],axis=[0,1,3])
+        last_state = tf.squeeze(outputs[-1:, -1:, :, -1:, :],axis=[0,1,3])
         #combine multifrequency states into one aggregate
         logits = tf.matmul(last_state, self.W_z_z) + self.b_z_z
+        logits = logits + 1
         predictions = tf.nn.softmax(logits)
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self.ys,logits=logits)
-        loss = tf.reduce_mean(cross_entropy)
+        loss = -tf.reduce_mean(cross_entropy)
+        loss = tf.Print(loss,data=[loss])
 
-        train_op = tf.train.AdamOptimizer().minimize(loss)
+        train_op = tf.train.GradientDescentOptimizer(learning_rate=0.0001).minimize(loss)
 
         self.predictions = predictions
         self.loss = loss
@@ -146,19 +147,18 @@ class SFM_rnn():
                     for offset in range(0, len(xs), batch_size):
                         batch_x = xs[offset: offset + batch_size]
                         batch_y = ys[offset: offset + batch_size]
-                        #TODO: train step makes cross_entropy NAN
-                        #_, train_loss_ = sess.run([self.train_op,self.loss], feed_dict={self._inputs : batch_x, self.ys : batch_y})
-                        train_loss_ = sess.run(self.loss,feed_dict={self._inputs: batch_x, self.ys: batch_y})
+                        _, train_loss_ = sess.run([self.train_op,self.loss], feed_dict={self._inputs : batch_x, self.ys : batch_y})
+                        #train_loss_ = sess.run(self.loss,feed_dict={self._inputs: batch_x, self.ys: batch_y})
                         train_loss += train_loss_
                     print('[{}] loss: {}'.format(i,train_loss/100))
                     train_loss = 0
             except KeyboardInterrupt:
                 print('Interrupted by user')
 
-X, Y = make_sequences(['AAPL'])
+#X, Y = make_sequences(['AAPL'])
 
-#X = np.random.rand(1000, 8, 20)
-#seq_labels = np.random.choice([True,False],size=[1000, 2])
+X_train = np.random.rand(1000, 8, 20)
+y_train = np.random.choice([True,False],size=[1000, 2])
 
 def get_on_hot(number):
     on_hot = [0] * 10
@@ -166,19 +166,19 @@ def get_on_hot(number):
     return on_hot
 
 digits = datasets.load_digits()
-#X = digits.images
-#Y_ = digits.target
+X = digits.images
+Y_ = digits.target
 
-#Y = [get_on_hot(x) for x in Y_]
+Y = [get_on_hot(x) for x in Y_]
 
-X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
+#X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
 
 # Cuttting for simple iteration
-X_train = X_train[:1400]
-y_train = y_train[:1400]
+#X_train = X_train[:1400]
+#y_train = y_train[:1400]
 
-X_train = np.array(X_train)
-y_train = np.array(y_train)
+#X_train = np.array(X_train)
+#y_train = np.array(y_train)
 
 SFM = SFM_rnn(state_size=X_train.shape[1],input_size=X_train.shape[2], target_size=y_train.shape[1], model_name='SFM_1')
 SFM.train(train_set=[X_train,y_train],epochs=10)
