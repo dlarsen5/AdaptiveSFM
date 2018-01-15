@@ -115,6 +115,7 @@ class SFM_rnn():
         self.initial_hidden_time = tf.expand_dims(self.initial_hidden_time,axis=-1)
         self.initial_hidden_time = tf.matmul(self.initial_hidden_time,tf.transpose(self.initial_hidden_time,perm=[0,2,1]))
         self.initial_hidden_time = tf.multiply(self.initial_hidden_time,tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
+        self.initial_hidden_time = self.initial_hidden_time + 1
 
         self.initial_hidden = tf.stack([self.initial_hidden_time, self.initial_hidden_time, self.initial_hidden_time, self.initial_hidden_time],axis=0)
 
@@ -124,13 +125,11 @@ class SFM_rnn():
         last_state = tf.squeeze(outputs[-1:, -1:, :, -1:, :],axis=[0,1,3])
         #combine multifrequency states into one aggregate
         logits = tf.matmul(last_state, self.W_z_z) + self.b_z_z
-        logits = logits + 1
         predictions = tf.nn.softmax(logits)
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self.ys,logits=logits)
-        loss = -tf.reduce_mean(cross_entropy)
-        loss = tf.Print(loss,data=[loss])
+        loss = tf.reduce_mean(cross_entropy)
 
-        train_op = tf.train.GradientDescentOptimizer(learning_rate=0.0001).minimize(loss)
+        train_op = tf.train.AdamOptimizer(learning_rate=0.01).minimize(loss)
 
         self.predictions = predictions
         self.loss = loss
@@ -148,7 +147,6 @@ class SFM_rnn():
                         batch_x = xs[offset: offset + batch_size]
                         batch_y = ys[offset: offset + batch_size]
                         _, train_loss_ = sess.run([self.train_op,self.loss], feed_dict={self._inputs : batch_x, self.ys : batch_y})
-                        #train_loss_ = sess.run(self.loss,feed_dict={self._inputs: batch_x, self.ys: batch_y})
                         train_loss += train_loss_
                     print('[{}] loss: {}'.format(i,train_loss/100))
                     train_loss = 0
@@ -157,8 +155,8 @@ class SFM_rnn():
 
 #X, Y = make_sequences(['AAPL'])
 
-X_train = np.random.rand(1000, 8, 20)
-y_train = np.random.choice([True,False],size=[1000, 2])
+#X_train = np.random.rand(1000, 8, 20)
+#y_train = np.random.choice([True,False],size=[1000, 2])
 
 def get_on_hot(number):
     on_hot = [0] * 10
@@ -171,14 +169,14 @@ Y_ = digits.target
 
 Y = [get_on_hot(x) for x in Y_]
 
-#X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
 
 # Cuttting for simple iteration
-#X_train = X_train[:1400]
-#y_train = y_train[:1400]
+X_train = X_train[:1400]
+y_train = y_train[:1400]
 
-#X_train = np.array(X_train)
-#y_train = np.array(y_train)
+X_train = np.array(X_train)
+y_train = np.array(y_train)
 
 SFM = SFM_rnn(state_size=X_train.shape[1],input_size=X_train.shape[2], target_size=y_train.shape[1], model_name='SFM_1')
-SFM.train(train_set=[X_train,y_train],epochs=10)
+SFM.train(train_set=[X_train,y_train],epochs=100)
