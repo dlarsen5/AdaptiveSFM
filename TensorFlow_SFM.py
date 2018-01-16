@@ -131,29 +131,36 @@ class SFM_rnn():
 
         train_op = tf.train.AdamOptimizer(learning_rate=0.01).minimize(loss)
 
+        correct_prediction = tf.equal(tf.argmax(self.ys, 1), tf.argmax(predictions, 1))
+        accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32))) * 100
+
         self.predictions = predictions
         self.loss = loss
         self.train_op = train_op
+        self.accuracy = accuracy
 
     def train(self, train_set, epochs=100, batch_size=100):
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             train_loss = 0
+            train_accuracy = 0
             try:
                 for i in range(epochs):
                     xs, ys = train_set
                     for offset in range(0, len(xs), batch_size):
                         batch_x = xs[offset: offset + batch_size]
                         batch_y = ys[offset: offset + batch_size]
-                        _, train_loss_ = sess.run([self.train_op,self.loss], feed_dict={self._inputs : batch_x, self.ys : batch_y})
+                        _, train_loss_, accuracy = sess.run([self.train_op,self.loss, self.accuracy], feed_dict={self._inputs : batch_x, self.ys : batch_y})
                         train_loss += train_loss_
-                    print('[{}] loss: {}'.format(i,train_loss/100))
+                        train_accuracy += accuracy
+                    print('[{}] loss: {} accuracy: {}'.format(i,train_loss/100,train_accuracy/100))
                     train_loss = 0
+                    train_accuracy = 0
             except KeyboardInterrupt:
                 print('Interrupted by user')
 
-#X, Y = make_sequences(['AAPL'])
+X, Y = make_sequences(['AAPL'])
 
 #X_train = np.random.rand(1000, 8, 20)
 #y_train = np.random.choice([True,False],size=[1000, 2])
@@ -164,10 +171,10 @@ def get_on_hot(number):
     return on_hot
 
 digits = datasets.load_digits()
-X = digits.images
-Y_ = digits.target
+#X = digits.images
+#Y_ = digits.target
 
-Y = [get_on_hot(x) for x in Y_]
+#Y = [get_on_hot(x) for x in Y_]
 
 X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
 
@@ -179,4 +186,4 @@ X_train = np.array(X_train)
 y_train = np.array(y_train)
 
 SFM = SFM_rnn(state_size=X_train.shape[1],input_size=X_train.shape[2], target_size=y_train.shape[1], model_name='SFM_1')
-SFM.train(train_set=[X_train,y_train],epochs=100)
+SFM.train(train_set=[X_train,y_train],epochs=10)
