@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
+import sys
 from Get_Data import make_sequences
 
 class SFM_rnn():
@@ -22,43 +23,43 @@ class SFM_rnn():
         self._inputs = tf.placeholder(tf.float64, shape=[None, self.state_size, self.input_size])
         self.ys = tf.placeholder(tf.float64, shape=[None, self.target_size])
 
-        self.W_state = tf.Variable(np.random.uniform(size=[self.input_size, self.state_size]))
-        self.V_state = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
-        self.b_state = tf.Variable(np.random.uniform(size=[self.state_size]))
+        self.W_state = tf.Variable(tf.zeros([self.input_size, self.state_size],dtype=tf.float64))
+        self.V_state = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
+        self.b_state = tf.Variable(tf.zeros([self.state_size],dtype=tf.float64))
 
-        self.W_freq = tf.Variable(np.random.uniform(size=[self.input_size, self.state_size]))
-        self.V_freq = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
-        self.b_freq = tf.Variable(np.random.uniform(size=[self.state_size]))
+        self.W_freq = tf.Variable(tf.zeros([self.input_size, self.state_size],dtype=tf.float64))
+        self.V_freq = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
+        self.b_freq = tf.Variable(tf.zeros([self.state_size],dtype=tf.float64))
 
-        self.W_g = tf.Variable(np.random.uniform(size=[self.input_size, self.state_size]))
-        self.V_g = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
-        self.b_g = tf.Variable(np.random.uniform(size=[self.state_size]))
+        self.W_g = tf.Variable(tf.zeros([self.input_size, self.state_size],dtype=tf.float64))
+        self.V_g = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
+        self.b_g = tf.Variable(tf.zeros([self.state_size],dtype=tf.float64))
 
-        self.W_i = tf.Variable(np.random.uniform(size=[self.input_size, self.state_size]))
-        self.V_i = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
-        self.b_i = tf.Variable(np.random.uniform(size=[self.state_size]))
+        self.W_i = tf.Variable(tf.zeros([self.input_size, self.state_size],dtype=tf.float64))
+        self.V_i = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
+        self.b_i = tf.Variable(tf.zeros([self.state_size],dtype=tf.float64))
 
-        self.U_o = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size, self.state_size]))
-        self.W_o = tf.Variable(np.random.uniform(size=[self.state_size, self.input_size, self.state_size]))
-        self.V_o = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size, self.state_size]))
-        self.b_o = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
+        self.U_o = tf.Variable(tf.zeros([self.state_size, self.state_size, self.state_size],dtype=tf.float64))
+        self.W_o = tf.Variable(tf.zeros([self.state_size, self.input_size, self.state_size],dtype=tf.float64))
+        self.V_o = tf.Variable(tf.zeros([self.state_size, self.state_size, self.state_size],dtype=tf.float64))
+        self.b_o = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
 
-        self.W_z = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size, self.state_size]))
-        self.b_z = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
+        self.W_z = tf.Variable(tf.zeros([self.state_size, self.state_size, self.state_size],dtype=tf.float64))
+        self.b_z = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
 
-        self.W_omega = tf.Variable(np.random.uniform(size=[self.input_size, self.state_size]))
-        self.V_omega = tf.Variable(np.random.uniform(size=[self.state_size, self.state_size]))
-        self.b_omega = tf.Variable(np.random.uniform(size=[self.state_size]))
-
-        self.W_z_z = tf.Variable(np.random.uniform(size=[self.state_size, self.target_size]))
-        self.b_z_z = tf.Variable(np.random.uniform(size=[self.target_size]))
+        self.W_omega = tf.Variable(tf.zeros([self.input_size, self.state_size],dtype=tf.float64))
+        self.V_omega = tf.Variable(tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
+        self.b_omega = tf.Variable(tf.zeros([self.state_size],dtype=tf.float64))
+        #final output, map from state_size to target_size
+        self.W_z_z = tf.Variable(tf.truncated_normal([self.state_size, self.target_size],dtype=tf.float64, mean=0, stddev=.01))
+        self.b_z_z = tf.Variable(tf.truncated_normal([self.target_size], mean=0, stddev=.01, dtype=tf.float64))
 
         def step(prev_output, input):
 
             x_, t_ = input
-
+            #get previous state variables
             omg_, Re_s_, Im_s_, z_ = tf.unstack(prev_output)
-
+            #Only need one vector from matrix for forward step
             omg_ = omg_[:, :, 1]
             z_ = z_[:, :, 1]
 
@@ -111,70 +112,90 @@ class SFM_rnn():
 
             return tf.stack([omega, real_s, img_s, new_z])
 
+        def get_output(hidden_state):
+
+            output = tf.nn.relu(tf.matmul(hidden_state,self.W_z_z) + self.b_z_z)
+
+            return output
+
         self.initial_hidden_time = tf.reduce_sum(self._inputs,2)
         self.initial_hidden_time = tf.expand_dims(self.initial_hidden_time,axis=-1)
         self.initial_hidden_time = tf.matmul(self.initial_hidden_time,tf.transpose(self.initial_hidden_time,perm=[0,2,1]))
         self.initial_hidden_time = tf.multiply(self.initial_hidden_time,tf.zeros([self.state_size, self.state_size],dtype=tf.float64))
-        self.initial_hidden_time = self.initial_hidden_time + 1
+        self.initial_hidden_time = self.initial_hidden_time + 100
 
         self.initial_hidden = tf.stack([self.initial_hidden_time, self.initial_hidden_time, self.initial_hidden_time, self.initial_hidden_time],axis=0)
 
         self.processed_input = tf.transpose(tf.transpose(self._inputs,perm=[2,0,1]))
         outputs = tf.scan(step, elems=[self.processed_input,(np.arange(self.state_size, dtype=np.float64) + 1) / self.state_size], initializer=self.initial_hidden)
-        #last state of hidden state matrices
-        last_state = tf.squeeze(outputs[-1:, -1:, :, -1:, :],axis=[0,1,3])
-        #combine multifrequency states into one aggregate
-        logits = tf.matmul(last_state, self.W_z_z) + self.b_z_z
-        predictions = tf.nn.softmax(logits)
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self.ys,logits=logits)
-        loss = tf.reduce_mean(cross_entropy)
 
-        train_op = tf.train.AdamOptimizer(learning_rate=0.01).minimize(loss)
+        outputs = tf.squeeze(outputs[:, -1:, :, :, -1:],axis=[1,4])
+        all_outputs = tf.map_fn(get_output,outputs)
+        last_output = all_outputs[-1]
 
-        correct_prediction = tf.equal(tf.argmax(self.ys, 1), tf.argmax(predictions, 1))
-        accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32))) * 100
+        final_output = tf.nn.softmax(last_output)
 
-        self.predictions = predictions
-        self.loss = loss
+        cross = -tf.reduce_mean(self.ys * tf.log(final_output))
+
+        train_op = tf.train.AdamOptimizer().minimize(cross)
+
+        correct_prediction = tf.equal(tf.argmax(self.ys, 1), tf.argmax(final_output, 1))
+        accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32)))
+
+        self.loss = cross
         self.train_op = train_op
         self.accuracy = accuracy
 
-    def train(self, train_set, epochs=100, batch_size=100):
+    def train(self, train_set, test_set):
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            train_loss = 0
-            train_accuracy = 0
-            try:
-                for i in range(epochs):
-                    xs, ys = train_set
-                    for offset in range(0, len(xs), batch_size):
-                        batch_x = xs[offset: offset + batch_size]
-                        batch_y = ys[offset: offset + batch_size]
-                        _, train_loss_, accuracy = sess.run([self.train_op,self.loss, self.accuracy], feed_dict={self._inputs : batch_x, self.ys : batch_y})
-                        train_loss += train_loss_
-                        train_accuracy += accuracy
-                    print('[{}] loss: {} accuracy: {}'.format(i,train_loss/100,train_accuracy/100))
-                    train_loss = 0
-                    train_accuracy = 0
-            except KeyboardInterrupt:
-                print('Interrupted by user')
+            X, Y = train_set
+            X_test, y_test = test_set
 
-X, Y = make_sequences(['AAPL'])
+            for epoch in range(200):
 
-#X_train = np.random.rand(1000, 8, 20)
-#y_train = np.random.choice([True,False],size=[1000, 2])
+                start = 0
+                end = 100
+                for i in range(10):
+                    X = X_train[start:end]
+                    Y = y_train[start:end]
+                    start = end
+                    end = start + 100
+                    sess.run(self.train_op, feed_dict={self._inputs: X, self.ys: Y})
 
-def get_on_hot(number):
-    on_hot = [0] * 10
-    on_hot[number] = 1
-    return on_hot
+                Loss = str(sess.run(self.loss, feed_dict={self._inputs: X, self.ys: Y}))
 
-digits = datasets.load_digits()
-#X = digits.images
-#Y_ = digits.target
+                Train_accuracy = str(sess.run(self.accuracy, feed_dict={
+                    self._inputs: X_train[:500], self.ys: y_train[:500]}))
 
-#Y = [get_on_hot(x) for x in Y_]
+                Test_accuracy = str(sess.run(self.accuracy, feed_dict={
+                    self._inputs: X_test, self.ys: y_test}))
+
+                sys.stdout.flush()
+                print("\rIteration: %s Loss: %s Train Accuracy: %s Test Accuracy: %s" %
+                      (epoch, Loss, Train_accuracy, Test_accuracy)),
+                sys.stdout.flush()
+
+def make_digits_data():
+
+
+    def get_on_hot(number):
+        on_hot = [0] * 10
+        on_hot[number] = 1
+        return on_hot
+
+    digits = datasets.load_digits()
+    X = digits.images
+    Y_ = digits.target
+
+    Y = [get_on_hot(x) for x in Y_]
+
+    return X,Y
+
+#X, Y = make_sequences(['AAPL'])
+
+X, Y = make_digits_data()
 
 X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
 
@@ -186,4 +207,4 @@ X_train = np.array(X_train)
 y_train = np.array(y_train)
 
 SFM = SFM_rnn(state_size=X_train.shape[1],input_size=X_train.shape[2], target_size=y_train.shape[1], model_name='SFM_1')
-SFM.train(train_set=[X_train,y_train],epochs=10)
+SFM.train(train_set=[X_train,y_train],test_set=[X_test,y_test])
