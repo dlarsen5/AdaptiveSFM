@@ -23,6 +23,13 @@ from keras.layers import LSTM
 from keras import optimizers
 from keras.callbacks import ModelCheckpoint
 
+import os
+
+graphviz_path = os.path.join('C:\\','Users','David','Anaconda3','Library','bin','graphviz')
+os.environ['PATH'] += ';' + graphviz_path
+
+from keras.utils.vis_utils import plot_model
+
 def MyRnn(step_function, inputs, fourier_timesteps, initial_states,
         go_backwards=False, mask=None, constants=None,
         unroll=False, input_length=None):
@@ -105,6 +112,8 @@ def MyRnn(step_function, inputs, fourier_timesteps, initial_states,
         input_list = tf.unstack(inputs)
         if go_backwards:
             input_list.reverse()
+            #todo not sure if axis works
+            np.flip(fourier_timesteps,axis=0)
 
         if mask is not None:
             mask_list = tf.unstack(mask)
@@ -324,9 +333,9 @@ class SFMCell(Layer):
                  activation='tanh',
                  recurrent_activation='hard_sigmoid',
                  use_bias=True,
-                 kernel_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
-                 bias_initializer='zeros',
+                 kernel_initializer='zeros',
+                 recurrent_initializer='zeros',
+                 bias_initializer='ones',
                  unit_forget_bias=True,
                  kernel_regularizer=None,
                  recurrent_regularizer=None,
@@ -368,7 +377,7 @@ class SFMCell(Layer):
         #todo implement better method
         #todo one of the shapes is a tensorflow Dimension object, change to int or float
         input_dim = input_shape[-1]
-
+        #todo fails here
         self.kernel = self.add_weight(shape=(input_dim, self.units * 5),
                                       name='kernel',
                                       initializer=self.kernel_initializer,
@@ -670,9 +679,9 @@ class SFM(recurrent.RNN):
                  activation='tanh',
                  recurrent_activation='hard_sigmoid',
                  use_bias=True,
-                 kernel_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
-                 bias_initializer='zeros',
+                 kernel_initializer='zeros',
+                 recurrent_initializer='zeros',
+                 bias_initializer='ones',
                  unit_forget_bias=True,
                  kernel_regularizer=None,
                  recurrent_regularizer=None,
@@ -734,7 +743,8 @@ class SFM(recurrent.RNN):
     def get_initial_state(self, inputs):
         # build an all-zero tensor of shape (samples, output_dim)
         initial_state = K.zeros_like(inputs)  # (samples, timesteps, input_dim)
-        initial_state = K.sum(initial_state, axis=(1, 2))  # (samples,)
+        initial_state = K.sum(initial_state, axis=(1, 2)) + 1  # (samples,)
+        initial_state = K.ones_like(initial_state)
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
 
         if hasattr(self.cell.state_size, '__len__'):
@@ -759,10 +769,10 @@ class SFM(recurrent.RNN):
         if isinstance(mask, list):
             mask = mask[0]
 
+        #todo could be failing here
+        #input_shape is an object of TensorShape
         input_shape = inputs.shape
         timesteps = input_shape[1]
-
-        self.cell.build(input_shape=input_shape)
 
         if initial_state is not None:
             pass
@@ -781,7 +791,6 @@ class SFM(recurrent.RNN):
         fourier_timesteps = (np.arange(self.cell.state_size[0], dtype=np.float64) + 1) / self.cell.state_size[0]
         initial_state = initial_state[0]
 
-        #states output is most recent
         last_output, outputs, states = MyRnn(self.cell.call,
                                              inputs,fourier_timesteps,
                                              initial_state,
@@ -914,9 +923,7 @@ class SFM(recurrent.RNN):
             config['implementation'] = 1
         return cls(**config)
 
-
 X,Y = Get_Data.make_digits_data()
-#X,Y = Get_Data.make_bit_sequences('btc')
 
 X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.22)
 
@@ -930,8 +937,14 @@ y_test = np.array(y_test).astype(np.float32)
 
 model = Sequential([
     SFM(X_train.shape[1],input_shape=(X_train.shape[1],X_train.shape[2]),return_sequences=True),
-    Dropout(0.4),
-    SFM(128)
+    SFM(X_train.shape[1]),
+    Dense(y_train.shape[-1])
 ])
 nadam = optimizers.Nadam(lr=0.01)#, beta_1=0.9, beta_2=0.999, epsilon=None, schedule_decay=0.004)
-model.compile(loss='cosine_proximity',optimizer=nadam,metrics=['accuracy'])
+model.compile(loss='logcosh',optimizer='Nadam',metrics=['accuracy'])
+
+model_save_path = 'C://Users//David//PycharmProjects//State-Frequency-Memory-Recurrent-Neural-Networks//files//model.png'
+
+#plot_model(model, to_file=model_save_path,show_shapes=True)
+
+model.fit(X_train, y_train, epochs=100, batch_size=128)
