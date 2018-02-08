@@ -1,13 +1,22 @@
-# State-Frequency-Memory-Recurrent-Neural-Networks
+# State-Frequency Memory Recurrent Neural Network in TensorFlow and Keras
 
-Code for paper 'State-Frequency-Memory-Recurrent-Neural-Networks', ICML 2017
+From[Hu, Qi (2017)](http://proceedings.mlr.press/v70/hu17c/hu17c.pdf), a state-frequency memory recurrent 
+neural network implemented in TensorFlow and Keras. Implementation in Keras makes it easy to add additional recurrent
+layers of any type and experimentation with different loss functions and optimizers.
 
-Initial release
+## Getting Started
 
-Required libraries: Theano
+Make sure you have the dependencies installed and the './datasets' folder in the same root directory. Can use the Keras
+and TensorFlow scripts independently or run the example scripts to see the network in action. The examples gather digits
+data from sklearn's[digits data](http://scikit-learn.org/stable/modules/generated/sklearn.datasets.load_digits.html#sklearn.datasets.load_digits).
+You can also generate text sequence data for training by utilizing [Data.make_text_data()] but due to the nature of the 
+network, this can significantly increase computation time.
 
-Code for training on Music datasets
+Also make sure you check out the original paper, very neat stuff.
 
-1. Download the music datasets from http://www-etud.iro.umontreal.ca/~boulanni/icml2012 and put them under the ./data folder
-2. Modifiy the data and lib path to your local machine
-3. Run python SFM_train.py to train the SFM.
+## Built With
+
+* [Keras](https://keras.io/)
+* [TensorFlow](https://www.tensorflow.org/)
+* [Numpy](http://www.numpy.org/)
+* [Scikit-Learn](http://scikit-learn.org/stable/)
