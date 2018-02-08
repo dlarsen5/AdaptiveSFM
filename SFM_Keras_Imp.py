@@ -12,7 +12,7 @@ import tensorflow as tf
 import numpy as np
 from numpy import newaxis
 
-class SFMCell(Layer):
+class Adaptive_SFMCell(Layer):
     """Cell class for the LSTM layer.
 
     # Arguments
@@ -84,7 +84,7 @@ class SFMCell(Layer):
                  recurrent_dropout=0.,
                  implementation=1,
                  **kwargs):
-        super(SFMCell, self).__init__(**kwargs)
+        super(Adaptive_SFMCell, self).__init__(**kwargs)
         self.units = units
         self.activation = activations.get(activation)
         self.recurrent_activation = activations.get(recurrent_activation)
@@ -112,25 +112,27 @@ class SFMCell(Layer):
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
-
+        # input weights
         self.kernel = self.add_weight(shape=(input_dim, self.units * 5),
                                       name='kernel',
                                       initializer=self.kernel_initializer,
                                       regularizer=self.kernel_regularizer,
                                       constraint=self.kernel_constraint)
+        # recurrent weights
         self.recurrent_kernel = self.add_weight(
             shape=(self.units, self.units * 5),
             name='recurrent_kernel',
             initializer=self.recurrent_initializer,
             regularizer=self.recurrent_regularizer,
             constraint=self.recurrent_constraint)
-
+        # add weights for fourier frequency components
         self.frequency_kernel = self.add_weight(shape=(self.units,self.units,self.units*3),
                                                 name='frequency_kernel',
                                                 initializer=self.recurrent_initializer,
                                                 regularizer=self.recurrent_regularizer,
                                                 constraint=self.recurrent_constraint
                                                 )
+        # add weight for frequency components inputs
         self.frequency_kernel_input = self.add_weight(shape=(self.units, input_dim, self.units),
                                                 name='frequency_kernel_input',
                                                 initializer=self.recurrent_initializer,
@@ -153,6 +155,7 @@ class SFMCell(Layer):
                                         initializer=bias_initializer,
                                         regularizer=self.bias_regularizer,
                                         constraint=self.bias_constraint)
+            # frequency component bias weights
             self.freq_bias = self.add_weight(shape=(self.units*2,self.units,),
                                         name='freq_bias',
                                         initializer=bias_initializer,
@@ -210,7 +213,7 @@ class SFMCell(Layer):
                 dropped_inputs,
                 ones,
                 training=training)
-                for _ in range(6)]
+                for _ in range(5)]
         else:
             self._dropout_mask = None
 
@@ -226,13 +229,12 @@ class SFMCell(Layer):
                 dropped_inputs,
                 ones,
                 training=training)
-                for _ in range(6)]
+                for _ in range(5)]
         else:
             self._recurrent_dropout_mask = None
 
-    def outer_product(self,inputs):
-        #returns outer product between two two dimensional inputs
-        x, y = inputs
+    def outer_product(self,x,y):
+        # returns outer product between two two dimensional inputs
         outerProduct = x[:, :, newaxis] * y[:, newaxis, :]
         return outerProduct
 
@@ -247,11 +249,12 @@ class SFMCell(Layer):
         Re_s_ = states[2]
         omg_ = states[3]
 
+        # only need one column of each matrix since they're all the same
         omg_ = omg_[:, :, 1]
         z_ = z_[:, :, 1]
 
-        t_ = inputs[1]
         inputs_ = inputs[0]
+        t_ = inputs[1]
 
         if 0. < self.dropout < 1.:
             inputs_i = inputs_* dp_mask[0]
@@ -298,7 +301,7 @@ class SFMCell(Layer):
 
         freq = self.recurrent_activation(x_freq + K.dot(z_freq, self.recurrent_kernel_freq))
         state = self.recurrent_activation(x_state + K.dot(z_state, self.recurrent_kernel_state))
-        combined_forget_gate = self.outer_product([freq, state])
+        combined_forget_gate = self.outer_product(freq, state)
 
         i = self.recurrent_activation(x_i + K.dot(z_i, self.recurrent_kernel_i))
 
@@ -306,16 +309,16 @@ class SFMCell(Layer):
 
         omega = x_omg + K.dot(z_omg, self.recurrent_kernel_omg)
 
-        real_s = combined_forget_gate * Re_s_ + self.outer_product([i * g, K.cos(omg_ * t_)])
-        img_s = combined_forget_gate * Im_s_ + self.outer_product([i * g, K.sin(omg_ * t_)])
+        real_s = combined_forget_gate * Re_s_ + self.outer_product(i * g, K.cos(omg_ * t_))
+        img_s = combined_forget_gate * Im_s_ + self.outer_product(i * g, K.sin(omg_ * t_))
 
         amplitude = K.sqrt(K.square(real_s) + K.square(img_s))
-
+        # transpose to dimensions (frequency_components, samples, state) for tf.scan
         amplitude = tf.transpose(amplitude, perm=[1, 0, 2])
 
-        def __freq(z_k, all_input):
+        def __freq(z_k, inputs_):
 
-            U_k, W_k, V_k, b_k, W_z_k, b_z_k, A_k = all_input
+            U_k, W_k, V_k, b_k, W_z_k, b_z_k, A_k = inputs_
             o = self.recurrent_activation(K.dot(A_k, U_k) + K.dot(inputs_o, W_k) + K.dot(z_o, V_k) + b_k)
             zz = z_k + o * K.tanh(K.dot(A_k, W_z_k) + b_z_k)
 
@@ -325,15 +328,16 @@ class SFMCell(Layer):
                                      self.frequency_kernel_V,self.freq_bias_o,
                                      self.frequency_kernel_W_z,self.freq_bias_z,
                                      amplitude],initializer=tf.zeros(tf.shape(z_)))
-
+        # get last summation state for final sum
         h = h[-1]
+        # make new omega and h matrices to fit size of other stacked matrices
         omega = tf.stack([omega for _ in range(self.state_size[0])], axis=1)
         h = tf.stack([h for _ in range(self.state_size[0])], axis=1)
 
         return h, [h, img_s, real_s, omega]
 
-class SFM(recurrent.RNN):
-    """Long-Short Term Memory layer - Hochreiter 1997.
+class Adaptive_SFM(recurrent.RNN):
+    """Adaptive State-Frequency Memory Recurrent Neural Network - Hu, Qi 2017.
 
     # Arguments
         units: Positive integer, dimensionality of the output space.
@@ -394,15 +398,9 @@ class SFM(recurrent.RNN):
         stateful: Boolean (default False). If True, the last state
             for each sample at index i in a batch will be used as initial
             state for the sample of index i in the following batch.
-        unroll: Boolean (default False).
-            If True, the network will be unrolled,
-            else a symbolic loop will be used.
-            Unrolling can speed-up a RNN,
-            although it tends to be more memory-intensive.
-            Unrolling is only suitable for short sequences.
 
     # References
-        - [Long short-term memory](http://www.bioinf.jku.at/publications/older/2604.pdf) (original 1997 paper)
+        - [State-Frequency Memory Recurrent Neural Networks] (http://proceedings.mlr.press/v70/hu17c/hu17c.pdf)
         - [Learning to forget: Continual prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
         - [Supervised sequence labeling with recurrent neural networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
@@ -434,30 +432,30 @@ class SFM(recurrent.RNN):
                  unroll=False,
                  **kwargs):
 
-        cell = SFMCell(units,
-                        activation=activation,
-                        recurrent_activation=recurrent_activation,
-                        use_bias=use_bias,
-                        kernel_initializer=kernel_initializer,
-                        recurrent_initializer=recurrent_initializer,
-                        unit_forget_bias=False,
-                        bias_initializer=bias_initializer,
-                        kernel_regularizer=kernel_regularizer,
-                        recurrent_regularizer=recurrent_regularizer,
-                        bias_regularizer=bias_regularizer,
-                        kernel_constraint=kernel_constraint,
-                        recurrent_constraint=recurrent_constraint,
-                        bias_constraint=bias_constraint,
-                        dropout=dropout,
-                        recurrent_dropout=recurrent_dropout,
-                        implementation=implementation)
-        super(SFM, self).__init__(cell,
-                                   return_sequences=return_sequences,
-                                   return_state=return_state,
-                                   go_backwards=go_backwards,
-                                   stateful=stateful,
-                                   unroll=unroll,
-                                   **kwargs)
+        cell = Adaptive_SFMCell(units,
+                                activation=activation,
+                                recurrent_activation=recurrent_activation,
+                                use_bias=use_bias,
+                                kernel_initializer=kernel_initializer,
+                                recurrent_initializer=recurrent_initializer,
+                                unit_forget_bias=False,
+                                bias_initializer=bias_initializer,
+                                kernel_regularizer=kernel_regularizer,
+                                recurrent_regularizer=recurrent_regularizer,
+                                bias_regularizer=bias_regularizer,
+                                kernel_constraint=kernel_constraint,
+                                recurrent_constraint=recurrent_constraint,
+                                bias_constraint=bias_constraint,
+                                dropout=dropout,
+                                recurrent_dropout=recurrent_dropout,
+                                implementation=implementation)
+        super(Adaptive_SFM, self).__init__(cell,
+                                           return_sequences=return_sequences,
+                                           return_state=return_state,
+                                           go_backwards=go_backwards,
+                                           stateful=stateful,
+                                           unroll=unroll,
+                                           **kwargs)
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     @property
@@ -474,9 +472,8 @@ class SFM(recurrent.RNN):
     def states(self, states):
         self._states = states
 
-    def SFMRnn(self,step_function, inputs, fourier_timesteps, initial_states,
-              go_backwards=False, mask=None, constants=None,
-              unroll=False, input_length=None):
+    def Adaptive_SFM_Rnn(self, step_function, inputs, fourier_timesteps, initial_states,
+                         go_backwards=False, mask=None, constants=None):
         """Iterates over the time dimension of a tensor.
 
         # Arguments
@@ -504,9 +501,6 @@ class SFM(recurrent.RNN):
             mask: binary tensor with shape `(samples, time, 1)`,
                 with a zero for every element that is masked.
             constants: a list of constant values passed at each step.
-            unroll: whether to unroll the RNN or to use a symbolic loop (`while_loop` or `scan` depending on backend).
-            input_length: not relevant in the TensorFlow implementation.
-                Must be specified if using unrolling with Theano.
 
         # Returns
             A tuple, `(last_output, outputs, new_states)`.
@@ -521,7 +515,6 @@ class SFM(recurrent.RNN):
         # Raises
             ValueError: if input dimension is less than 3.
             ValueError: if fourier timeseries length doesn't match time dimension of input
-            ValueError: if `unroll` is `True` but input timestep is not a fixed number.
             ValueError: if `mask` is provided (not `None`) but states is not provided
                 (`len(states)` == 0).
         """
@@ -547,173 +540,72 @@ class SFM(recurrent.RNN):
         global uses_learning_phase
         uses_learning_phase = False
 
-        if unroll:
-            if not inputs.get_shape()[0]:
-                raise ValueError('Unrolling requires a '
-                                 'fixed number of timesteps.')
-            states = initial_states
-            successive_states = []
-            successive_outputs = []
+        if not inputs.get_shape()[0]:
+            raise ValueError('Unrolling requires a '
+                             'fixed number of timesteps.')
+        states = initial_states
+        successive_states = []
+        successive_outputs = []
 
-            input_list = tf.unstack(inputs)
+        input_list = tf.unstack(inputs)
+        if go_backwards:
+            input_list.reverse()
+            np.flip(fourier_timesteps, axis=0)
+
+        if mask is not None:
+            mask_list = tf.unstack(mask)
             if go_backwards:
-                input_list.reverse()
-                np.flip(fourier_timesteps, axis=0)
+                mask_list.reverse()
 
-            if mask is not None:
-                mask_list = tf.unstack(mask)
-                if go_backwards:
-                    mask_list.reverse()
+            for inp, mask_t in zip(zip(input_list, fourier_timesteps), mask_list):
+                output, new_states = step_function(inp, states + constants)
+                if getattr(output, '_uses_learning_phase', False):
+                    uses_learning_phase = True
 
-                for inp, mask_t in zip(zip(input_list, fourier_timesteps), mask_list):
-                    output, new_states = step_function(inp, states + constants)
-                    if getattr(output, '_uses_learning_phase', False):
-                        uses_learning_phase = True
+                # tf.where needs its condition tensor
+                # to be the same shape as its two
+                # result tensors, but in our case
+                # the condition (mask) tensor is
+                # (nsamples, 1), and A and B are (nsamples, ndimensions).
+                # So we need to
+                # broadcast the mask to match the shape of A and B.
+                # That's what the tile call does,
+                # it just repeats the mask along its second dimension
+                # n times.
+                tiled_mask_t = tf.tile(mask_t,
+                                       tf.stack([1, tf.shape(output)[1]]))
 
-                    # tf.where needs its condition tensor
-                    # to be the same shape as its two
-                    # result tensors, but in our case
-                    # the condition (mask) tensor is
-                    # (nsamples, 1), and A and B are (nsamples, ndimensions).
-                    # So we need to
-                    # broadcast the mask to match the shape of A and B.
-                    # That's what the tile call does,
-                    # it just repeats the mask along its second dimension
-                    # n times.
+                if not successive_outputs:
+                    prev_output = K.zeros_like(output)
+                else:
+                    prev_output = successive_outputs[-1]
+
+                output = tf.where(tiled_mask_t, output, prev_output)
+
+                return_states = []
+                for state, new_state in zip(states, new_states):
+                    # (see earlier comment for tile explanation)
                     tiled_mask_t = tf.tile(mask_t,
-                                           tf.stack([1, tf.shape(output)[1]]))
-
-                    if not successive_outputs:
-                        prev_output = K.zeros_like(output)
-                    else:
-                        prev_output = successive_outputs[-1]
-
-                    output = tf.where(tiled_mask_t, output, prev_output)
-
-                    return_states = []
-                    for state, new_state in zip(states, new_states):
-                        # (see earlier comment for tile explanation)
-                        tiled_mask_t = tf.tile(mask_t,
-                                               tf.stack([1, tf.shape(new_state)[1]]))
-                        return_states.append(tf.where(tiled_mask_t,
-                                                      new_state,
-                                                      state))
-                    states = return_states
-                    successive_outputs.append(output)
-                    successive_states.append(states)
-                last_output = successive_outputs[-1]
-                new_states = successive_states[-1]
-                outputs = tf.stack(successive_outputs)
-            else:
-                for inp in zip(input_list, fourier_timesteps):
-                    output, states = step_function(inp, states)
-                    if getattr(output, '_uses_learning_phase', False):
-                        uses_learning_phase = True
-                    successive_outputs.append(output)
-                    successive_states.append(states)
-                last_output = successive_outputs[-1]
-                new_states = successive_states[-1]
-                outputs = tf.stack(successive_outputs)
-
+                                           tf.stack([1, tf.shape(new_state)[1]]))
+                    return_states.append(tf.where(tiled_mask_t,
+                                                  new_state,
+                                                  state))
+                states = return_states
+                successive_outputs.append(output)
+                successive_states.append(states)
+            last_output = successive_outputs[-1]
+            new_states = successive_states[-1]
+            outputs = tf.stack(successive_outputs)
         else:
-            if go_backwards:
-                inputs = K.reverse(inputs, 0)
-
-            states = tuple(initial_states)
-
-            time_steps = tf.shape(inputs)[0]
-            outputs, _ = step_function(inputs[0], initial_states + constants)
-            output_ta = K.tensor_array_ops.TensorArray(
-                dtype=outputs.dtype,
-                size=time_steps,
-                tensor_array_name='output_ta')
-            input_ta = K.tensor_array_ops.TensorArray(
-                dtype=inputs.dtype,
-                size=time_steps,
-                tensor_array_name='input_ta')
-            input_ta = input_ta.unstack(inputs)
-            time = tf.constant(0, dtype='int32', name='time')
-
-            if mask is not None:
-                if not states:
-                    raise ValueError('No initial states provided! '
-                                     'When using masking in an RNN, you should '
-                                     'provide initial states '
-                                     '(and your step function should return '
-                                     'as its first state at time `t` '
-                                     'the output at time `t-1`).')
-                if go_backwards:
-                    mask = K.reverse(mask, 0)
-
-                mask_ta = K.tensor_array_ops.TensorArray(
-                    dtype=tf.bool,
-                    size=time_steps,
-                    tensor_array_name='mask_ta')
-                mask_ta = mask_ta.unstack(mask)
-
-                def _step(time, output_ta_t, *states):
-                    """RNN step function.
-
-                    # Arguments
-                        time: Current timestep value.
-                        output_ta_t: TensorArray.
-                        *states: List of states.
-
-                    # Returns
-                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
-                    """
-                    current_input = input_ta.read(time)
-                    mask_t = mask_ta.read(time)
-                    output, new_states = step_function(current_input,
-                                                       tuple(states) +
-                                                       tuple(constants))
-                    if getattr(output, '_uses_learning_phase', False):
-                        global uses_learning_phase
-                        uses_learning_phase = True
-                    for state, new_state in zip(states, new_states):
-                        new_state.set_shape(state.get_shape())
-                    tiled_mask_t = tf.tile(mask_t,
-                                           tf.stack([1, tf.shape(output)[1]]))
-                    output = tf.where(tiled_mask_t, output, states[0])
-                    new_states = [tf.where(tiled_mask_t, new_states[i], states[i]) for i in range(len(states))]
-                    output_ta_t = output_ta_t.write(time, output)
-                    return (time + 1, output_ta_t) + tuple(new_states)
-            else:
-                def _step(time, output_ta_t, *states):
-                    """RNN step function.
-
-                    # Arguments
-                        time: Current timestep value.
-                        output_ta_t: TensorArray.
-                        *states: List of states.
-
-                    # Returns
-                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
-                    """
-                    current_input = input_ta.read(time)
-                    output, new_states = step_function(current_input,
-                                                       tuple(states) +
-                                                       tuple(constants))
-                    if getattr(output, '_uses_learning_phase', False):
-                        global uses_learning_phase
-                        uses_learning_phase = True
-                    for state, new_state in zip(states, new_states):
-                        new_state.set_shape(state.get_shape())
-                    output_ta_t = output_ta_t.write(time, output)
-                    return (time + 1, output_ta_t) + tuple(new_states)
-
-            final_outputs = K.control_flow_ops.while_loop(
-                cond=lambda time, *_: time < time_steps,
-                body=_step,
-                loop_vars=(time, output_ta) + states,
-                parallel_iterations=32,
-                swap_memory=True)
-            last_time = final_outputs[0]
-            output_ta = final_outputs[1]
-            new_states = final_outputs[2:]
-
-            outputs = output_ta.stack()
-            last_output = output_ta.read(last_time - 1)
+            for inp in zip(input_list, fourier_timesteps):
+                output, states = step_function(inp, states)
+                if getattr(output, '_uses_learning_phase', False):
+                    uses_learning_phase = True
+                successive_outputs.append(output)
+                successive_states.append(states)
+            last_output = successive_outputs[-1]
+            new_states = successive_states[-1]
+            outputs = tf.stack(successive_outputs)
 
         axes = [1, 0] + list(range(2, len(outputs.get_shape())))
         outputs = tf.transpose(outputs, axes)
@@ -722,11 +614,12 @@ class SFM(recurrent.RNN):
 
     def get_initial_state(self, inputs):
         # build an all-zero tensor of shape (samples, output_dim)
+        # fourier frequencies add additional dimension to initial states
         initial_state = K.zeros_like(inputs)  # (samples, timesteps, input_dim)
-        initial_state = K.sum(initial_state, axis=(1, 2)) + 1  # (samples,)
+        initial_state = K.sum(initial_state, axis=(1, 2))
         initial_state = K.ones_like(initial_state)
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
-
+        # adaptive SFM initial state has dimensions (4, samples, state_size, state_size)
         if hasattr(self.cell.state_size, '__len__'):
             return [K.stack([self.outer_product([K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])]),
                              self.outer_product([K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])]),
@@ -749,9 +642,6 @@ class SFM(recurrent.RNN):
         if isinstance(mask, list):
             mask = mask[0]
 
-        input_shape = inputs.shape
-        timesteps = input_shape[1]
-
         if initial_state is not None:
             pass
         elif self.stateful:
@@ -768,15 +658,13 @@ class SFM(recurrent.RNN):
 
         fourier_timesteps = (np.arange(self.cell.state_size[0], dtype=np.float64) + 1) / self.cell.state_size[0]
         initial_state = initial_state[0]
-
-        last_output, outputs, states = self.SFMRnn(self.cell.call,
-                                             inputs,fourier_timesteps,
-                                             initial_state,
-                                             constants=constants,
-                                             go_backwards=self.go_backwards,
-                                             mask=mask,
-                                             unroll=True,
-                                             input_length=timesteps)
+        # custom K.Rnn for adding fourier_timesteps input, only unroll routine
+        last_output, outputs, states = self.Adaptive_SFM_Rnn(self.cell.call,
+                                                             inputs, fourier_timesteps,
+                                                             initial_state,
+                                                             constants=constants,
+                                                             go_backwards=self.go_backwards,
+                                                             mask=mask)
 
         outputs = tf.squeeze(outputs[:,:,:,-1:], axis=[-1])
         last_output = last_output[:,-1:,:]
@@ -891,7 +779,7 @@ class SFM(recurrent.RNN):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'implementation': self.implementation}
-        base_config = super(SFM, self).get_config()
+        base_config = super(Adaptive_SFM, self).get_config()
         del base_config['cell']
         return dict(list(base_config.items()) + list(config.items()))
 
