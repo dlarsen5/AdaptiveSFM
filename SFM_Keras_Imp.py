@@ -235,8 +235,7 @@ class Adaptive_SFMCell(Layer):
 
     def outer_product(self,x,y):
         # returns outer product between two two dimensional inputs
-        outerProduct = x[:, :, newaxis] * y[:, newaxis, :]
-        return outerProduct
+        return x[:, :, newaxis] * y[:, newaxis, :]
 
     def call(self, inputs, states, training=None):
         # dropout matrices for input units
