@@ -620,16 +620,16 @@ class Adaptive_SFM(recurrent.RNN):
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
         # adaptive SFM initial state has dimensions (4, samples, state_size, state_size)
         if hasattr(self.cell.state_size, '__len__'):
-            return [K.stack([self.outer_product([K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])]),
-                             self.outer_product([K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])]),
-                             self.outer_product([K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])]),
-                             self.outer_product([K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])])])
+            return [K.stack([self.cell.outer_product(K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])),
+                             self.cell.outer_product(K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])),
+                             self.cell.outer_product(K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim])),
+                             self.cell.outer_product(K.tile(initial_state, [1, dim]), K.tile(initial_state, [1, dim]))])
                     for dim in self.cell.state_size]
         else:
-            return [K.stack([self.outer_product([K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])]),
-                             self.outer_product([K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])]),
-                             self.outer_product([K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])]),
-                             self.outer_product([K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])])])]
+            return [K.stack([self.cell.outer_product(K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])),
+                             self.cell.outer_product(K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])),
+                             self.cell.outer_product(K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size])),
+                             self.cell.outer_product(K.tile(initial_state, [1, self.cell.state_size]), K.tile(initial_state, [1, self.cell.state_size]))])]
 
     def call(self,
              inputs,
