@@ -13,7 +13,7 @@ import numpy as np
 from numpy import newaxis
 
 class Adaptive_SFMCell(Layer):
-    """Cell class for the LSTM layer.
+    """Cell class for the Adaptive SFM layer.
 
     # Arguments
         units: Positive integer, dimensionality of the output space.
