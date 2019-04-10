@@ -4,17 +4,17 @@ import numpy as np
 
 class AdaSFM():
     '''
-    Adaptive State-Frequency Machine
+    Adaptive State-Frequency Memory Recurrent Neural Network (Hu, Qi 2017.)
 
     References
     -------
-    Hu, Qi - State-Frequency Memory Recurrent Neural Networks (2017)
-        - http://proceedings.mlr.press/v70/hu17c/hu17c.pdf
+    [State-Frequency Memory Recurrent Neural Networks] (http://proceedings.mlr.press/v70/hu17c/hu17c.pdf)
+    [Learning to Forget: Continual Prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
+    [Supervised Sequence Labeling with Recurrent Neural Networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
+    [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
     '''
     def __init__(self, state_size, input_size, target_size, dtype=tf.float64):
         '''
-        Build graph and expose operations as methods
-
         Parameters
         -------
         state_size: int
@@ -35,26 +35,33 @@ class AdaSFM():
     def build_graph(self):
         """
         Build TensorFlow graph and expose operations as class methods
+
+        Returns
+        -------
+        - Set
+            * self.loss = loss_func
+            * self.train_op = train_op
+            * self.accuracy = accuracy
         """
-        # -------Sequence Input----
+        # -----Sequence Input------
         self._inputs = tf.placeholder(self.dtype, shape=[None,
                                                          self.state_size,
                                                          self.input_size])
         self.ys = tf.placeholder(self.dtype, shape=[None,
                                                     self.target_size])
-        # ----------State----------
+        # ---------State-----------
         self.W_state = tf.Variable(tf.zeros([self.input_size,
                                              self.state_size], dtype=self.dtype))
         self.V_state = tf.Variable(tf.zeros([self.state_size,
                                              self.state_size], dtype=self.dtype))
         self.b_state = tf.Variable(tf.ones([self.state_size], dtype=self.dtype))
-        # ---------Frequency-------
+        # --------Frequency--------
         self.W_freq = tf.Variable(tf.zeros([self.input_size,
                                             self.state_size], dtype=self.dtype))
         self.V_freq = tf.Variable(tf.zeros([self.state_size,
                                             self.state_size], dtype=self.dtype))
         self.b_freq = tf.Variable(tf.ones([self.state_size], dtype=self.dtype))
-        # ---------Modulation------
+        # --------Modulation-------
         self.W_g = tf.Variable(tf.zeros([self.input_size,
                                          self.state_size], dtype=self.dtype))
         self.V_g = tf.Variable(tf.zeros([self.state_size,
@@ -66,7 +73,7 @@ class AdaSFM():
         self.V_i = tf.Variable(tf.zeros([self.state_size,
                                          self.state_size], dtype=self.dtype))
         self.b_i = tf.Variable(tf.ones([self.state_size], dtype=self.dtype))
-        # ----Persistent State-----
+        # ------Persistent State---
         self.W_omega = tf.Variable(tf.zeros([self.input_size,
                                              self.state_size], dtype=self.dtype))
         self.V_omega = tf.Variable(tf.zeros([self.state_size,
@@ -99,10 +106,12 @@ class AdaSFM():
                                                      mean=1, stddev=.01,
                                                      dtype=self.dtype))
 
-        # Init hidden state from input dimensions
-        # - tf.stack() only accepts input of same dimension,
-        # - Need to make 4 states of dimensions
-        # - Final dim is (4, samples, timesteps, timesteps)
+        '''
+        Init hidden state from input dimensions
+            - tf.stack() only accepts input of same dimension,
+            - Need to make 4 states of dimensions
+            - Final dim is (4, samples, timesteps, timesteps)
+        '''
         self.init_hidden_t = tf.reduce_sum(self._inputs, 2)
         self.init_hidden_t = tf.expand_dims(self.init_hidden_t, axis=-1)
         self.init_hidden_t = tf.matmul(self.init_hidden_t,
@@ -118,8 +127,10 @@ class AdaSFM():
                                      self.init_hidden_t,
                                      self.init_hidden_t], axis=0)
 
-        # Transpose from dimensions (samples, timesteps, inputs)
-        # to dimensions (timesteps, samples, inputs)
+        '''
+        Transpose from dim (samples, timesteps, inputs)
+        to dim (timesteps, samples, inputs)
+        '''
         self._inp = tf.transpose(tf.transpose(self._inputs, perm=[2, 0, 1]))
 
         step_freq = tf.cast((np.arange(self.state_size, dtype=np.float64) + 1)
@@ -148,95 +159,108 @@ class AdaSFM():
         self.accuracy = accuracy
 
     def _step(self, prev, input):
-      '''
-      One time step along the sequence time axis
+        '''
+        One time step along the sequence time axis
 
-      Parameters
-      -------
-      prev: tf.stack
-      input: tf.stack
+        Parameters
+        -------
+        prev: tf.stack
+        input: tf.stack
 
-      Returns
-      -------
-      tf.stack
-          - Need to stack output vector to match size of state for output
-      '''
-      x_, t_ = input
-      omg_, real_, img_, z_ = tf.unstack(prev)
+        Returns
+        -------
+        out: tf.stack
+            - Need to stack output vector to match size of state for output
+        '''
+        x_, t_ = input
+        omg_, real_, img_, z_ = tf.unstack(prev)
 
-      omg_ = omg_[:, :, 1]
-      z_ = z_[:, :, 1]
+        omg_ = omg_[:, :, 1]
+        z_ = z_[:, :, 1]
 
-      state_fg = tf.sigmoid(tf.matmul(x_, self.W_state)
-                            + tf.matmul(z_, self.V_state)
-                            + self.b_state)
+        state_fg = tf.sigmoid(tf.matmul(x_, self.W_state)
+                                + tf.matmul(z_, self.V_state)
+                                + self.b_state)
 
-      freq_fg = tf.sigmoid(tf.matmul(x_,self.W_freq)
-                            + tf.matmul(z_, self.V_freq)
-                            + self.b_freq)
+        freq_fg = tf.sigmoid(tf.matmul(x_,self.W_freq)
+                                + tf.matmul(z_, self.V_freq)
+                                + self.b_freq)
 
-      fg = self.outer(state_fg, freq_fg)
+        fg = self._outer(state_fg, freq_fg)
 
-      inp_g = tf.sigmoid(tf.matmul(x_, self.W_g)
-                          + tf.matmul(z_, self.V_g)
-                          + self.b_g)
+        inp_g = tf.sigmoid(tf.matmul(x_, self.W_g)
+                            + tf.matmul(z_, self.V_g)
+                            + self.b_g)
 
-      mod_g = tf.tanh(tf.matmul(x_, self.W_i)
-                      + tf.matmul(z_, self.V_i)
-                      + self.b_i)
+        mod_g = tf.tanh(tf.matmul(x_, self.W_i)
+                        + tf.matmul(z_, self.V_i)
+                        + self.b_i)
 
-      omega = tf.matmul(x_, self.W_omega) + tf.matmul(z_, self.V_omega) + self.b_omega
+        omega = tf.matmul(x_, self.W_omega) + tf.matmul(z_, self.V_omega) + self.b_omega
 
-      real = fg * real_ + self.outer(inp_g * mod_g, tf.cos(omg_ * t_))
-      img = fg * img_ + self.outer(inp_g * mod_g, tf.sin(omg_ * t_))
+        real = fg * real_ + self._outer(inp_g * mod_g, tf.cos(omg_ * t_))
+        img = fg * img_ + self._outer(inp_g * mod_g, tf.sin(omg_ * t_))
 
-      amp = tf.sqrt(tf.add(tf.square(real), tf.square(img)))
+        amp = tf.sqrt(tf.add(tf.square(real), tf.square(img)))
 
-      # Transpose to dim (frequency_components, samples, state) for scan
-      amp = tf.transpose(amp,perm=[1,0,2])
+        # Transpose to dim (frequency_components, samples, state) for scan
+        amp = tf.transpose(amp,perm=[1,0,2])
 
-      z = tf.scan(self.__step,
-                  elems=[self.U_o, self.W_o, self.V_o,
-                         self.b_o, self.W_z, self.b_z, amp],
-                  initializer=tf.zeros(tf.shape(z_), dtype=self.dtype))
+        # Frequency Step Kernel
+        def __step(z_k, inputs):
+            '''
+            Second order step function for state (frequency)
 
-      z = z[-1]
-      # Match dim of state matrix
-      omega = tf.stack([omega for _ in range(self.state_size)], axis=1)
-      z = tf.stack([z for _ in range(self.state_size)], axis=1)
+            Parameters
+            -------
+            z_k: tf.stack
+            inputs: tf.stack
+                - Shape of (7, x, y, z)
 
-      return tf.stack([omega, real, img, z])
+            Returns
+            -------
+            tf.stack
+            '''
+            U_k, W_k, V_k, b_k, W_z_k, b_z_k, A_k = inputs
 
-    def __step(z_k, inputs):
-      '''
-      Second order step function for state
+            o = tf.sigmoid(tf.matmul(A_k, U_k)
+                            + tf.matmul(x_, W_k)
+                            + tf.matmul(z_, V_k) + b_k)
 
-      Parameters
-      -------
-      z_k: tf.stack
-      inputs: tf.stack
-          - Dim (7, x, y, z)
+            zz = z_k + o * tf.tanh(tf.matmul(A_k, W_z_k) + b_z_k)
 
-      Returns
-      -------
-      tf.stack
-      '''
-      U_k, W_k, V_k, b_k, W_z_k, b_z_k, A_k = inputs
+            return tf.stack(zz)
 
-      o = tf.sigmoid(tf.matmul(A_k, U_k)
-                      + tf.matmul(x_, W_k)
-                      + tf.matmul(z_, V_k) + b_k)
+        z = tf.scan(__step,
+                    elems=[self.U_o, self.W_o, self.V_o,
+                           self.b_o, self.W_z, self.b_z, amp],
+                    initializer=tf.zeros(tf.shape(z_), dtype=self.dtype))
+        last_z = z[-1]
 
-      zz = z_k + o * tf.tanh(tf.matmul(A_k, W_z_k) + b_z_k)
+        # Match dim of state matrix
+        omega = tf.stack([omega for _ in range(self.state_size)], axis=1)
+        last_z = tf.stack([last_z for _ in range(self.state_size)], axis=1)
 
-      return tf.stack(zz)
+        out = tf.stack([omega, real, img, last_z])
 
-    def outer(self, x, y):
-      '''
-      Outer Product of 2 3D matrix
-      Parameters
-      -------
-      x: tf.mat
-      y: tf.mat
-      '''
-      return x[:, :, np.newaxis] * y[:, np.newaxis, :]
+        return out
+
+    def _outer(self, x, y):
+        '''
+        Outer Product of 2 2D matrix
+
+        Parameters
+        -------
+        x: tf.tensor
+            - 2D Shape
+        y: tf.tensor
+            - 2D Shape
+
+        Returns
+        -------
+        out: tf.tensor
+            - 3D Shape
+        '''
+        out = x[:, :, np.newaxis] * y[:, np.newaxis, :]
+
+        return out

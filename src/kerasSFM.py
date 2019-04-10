@@ -290,7 +290,7 @@ class AdaSFMCell(Layer):
 
         freq = self.recurrent_activation(x_freq + K.dot(z_freq, self.recur_k_freq))
         state = self.recurrent_activation(x_state + K.dot(z_state, self.recur_k_state))
-        forget = self._outer(freq, state)
+        fg = self._outer(freq, state)
 
         i = self.recurrent_activation(x_i + K.dot(z_i, self.recur_k_i))
 
@@ -298,8 +298,8 @@ class AdaSFMCell(Layer):
 
         omega = x_omg + K.dot(z_omg, self.recur_k_omg)
 
-        real_s = forget * Re_s_ + self._outer(i * g, K.cos(omg_ * t_))
-        img_s = forget * Im_s_ + self._outer(i * g, K.sin(omg_ * t_))
+        real_s = fg * Re_s_ + self._outer(i * g, K.cos(omg_ * t_))
+        img_s = fg * Im_s_ + self._outer(i * g, K.sin(omg_ * t_))
 
         amplitude = K.sqrt(K.square(real_s) + K.square(img_s))
         # Transpose to dimensions (frequency_components, samples, state) for tf.scan

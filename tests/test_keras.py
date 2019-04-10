@@ -15,10 +15,10 @@ if __name__ == '__main__':
 
     X_train, y_train, X_test, y_test = digits()
 
-    sfm = Sequential([Adaptive_SFM(X_train.shape[1],
-                                   input_shape=(X_train.shape[1],
-                                                X_train.shape[2])),
-                      Dense(y_train.shape[-1])])
+    sfm = Sequential([AdaSFM(X_train.shape[1],
+                             input_shape=(X_train.shape[1],
+                                          X_train.shape[2])),
+                      Dense(10, activation='sigmoid')])
 
     sfm.compile(loss='mean_squared_error',
                 optimizer='Adam',
