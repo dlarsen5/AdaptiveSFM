@@ -1,5 +1,8 @@
-from tfSFM import AdaSFM
+import sys
+sys.path.append('src/')
+
 from Data import digits
+from tfSFM import AdaSFM
 
 import tensorflow as tf
 
@@ -28,12 +31,16 @@ if __name__ == '__main__':
             for i in range(0, x_train.shape[0], BATCH):
                 batch_X = x_train[mini_start:mini_end]
                 batch_Y = y_train[mini_start:mini_end]
+
                 mini_start = mini_end
                 mini_end = mini_start + BATCH
+
                 loss_, _ = sess.run([sfm.loss, sfm.train_op],
                                     feed_dict={sfm._inputs: batch_X,
                                                sfm.ys: batch_Y})
+
                 loss += loss_
+
 
             test_accuracy = sess.run(sfm.accuracy,
                                      feed_dict={sfm._inputs: x_test,
